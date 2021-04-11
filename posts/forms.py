@@ -13,6 +13,11 @@ class PostForm(forms.ModelForm):
             'group': _('Вы можете выбрать группу'),
             'text': _('Напишите сообщение')
         }
+        help_texts = {
+            'group': 'Поле не является обязательным',
+            'text': 'Придумайте текст для поста. '
+                    'Поле обязательно для заполнения',
+        }
 
 
 class GroupForm(forms.ModelForm):

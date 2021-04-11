@@ -1,14 +1,11 @@
 import datetime as dt
 
-from django.contrib.auth import get_user_model
 from django.test import Client, TestCase
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 
 from posts.forms import PostForm
-from posts.models import Group, Post
-
-User = get_user_model()
+from posts.models import Group, Post, User
 
 
 class PostPagesTests(TestCase):
@@ -37,7 +34,11 @@ class PostPagesTests(TestCase):
             'group': _('Вы можете выбрать группу'),
             'text': _('Напишите сообщение')
         }
-
+        self.help_texts = {
+            'group': 'Поле не является обязательным',
+            'text': _('Придумайте текст для поста. '
+                      'Поле обязательно для заполнения'),
+        }
 # Тест для проверки формы создания нового поста (страница /new/)
 
     def test_post_on_relevant_page(self):
@@ -62,5 +63,11 @@ class PostPagesTests(TestCase):
     def test_label(self):
         for title, label in self.labels.items():
             with self.subTest(title=title):
-                title_label = PostPagesTests.form.fields[title].label
+                title_label = self.form.fields[title].label
                 self.assertEqual(title_label, label)
+
+    def test_help_text(self):
+        for title, label in self.help_texts.items():
+            with self.subTest(title=title):
+                title_help_text = self.form.fields[title].help_text
+                self.assertEqual(title_help_text, label)

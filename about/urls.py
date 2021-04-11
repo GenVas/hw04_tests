@@ -4,5 +4,5 @@ from . import views
 
 urlpatterns = [
     path('author/', views.AboutAuthorStaticPage.as_view(), name='author'),
-    path('tech/', views.AboutAuthorStaticPage.as_view(), name='tech'),
+    path('tech/', views.AboutTechStaticPage.as_view(), name='tech'),
 ]
