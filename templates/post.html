@@ -4,8 +4,10 @@
 {% block header %}Страница поста{% endblock %}
 {% block content %}
 
-        <h3>Автор: <a href="{% url 'profile' post.author %}">{{ author }}</a>
-        , Дата публикации: {{ post.pub_date|date:"d M Y" }}</h3>
+    <h3>
+        Автор: <a href="{% url 'profile' post.author.username %}">{{ user.username }}</a>
+        , Дата публикации: {{ post.pub_date|date:"d M Y" }}
+    </h3>
 
     {% if post.group %}
         <h4>Группа: <a href="{% url 'group_posts' post.group.slug %}">{{ post.group }}</a></h4>

@@ -8,7 +8,7 @@
     {% for post in page %}
         
         <h3>
-            <h3>Автор: <a href="{% url 'profile' post.author %}">{{ post.author.get_full_name }}</a>,
+            <h3>Автор: <a href="{% url 'profile' post.author.username %}">{{ post.author.get_full_name }}</a>,
             Дата публикации: {{ post.pub_date|date:"d M Y" }}
         </h3>   
         

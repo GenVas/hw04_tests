@@ -1,96 +1,87 @@
-import datetime as dt
-import itertools
-
 from django.test import Client, TestCase
 from django.urls import reverse
 
 from posts.models import Group, Post, User
 
+HOME_PAGE, NEW_POST = reverse('index'), reverse('new_post')
+
 
 class StaticURLTests(TestCase):
-    @classmethod
-    def setUpClass(cls):
-        super().setUpClass()
-        cls.group = Group.objects.create(title="Тест-название",
-                                         slug='test_slug',
-                                         description="Тест-описание")
-
     def setUp(self):
+        self.group = Group.objects.create(title="Тест-название",
+                                          slug='test_slug',
+                                          description="Тест-описание")
         # первый клиент автор поста
-        self.guest_client = Client()
-        self.user = User.objects.create_user(username='IvanovI')
-        self.authorized_client = Client()
-        self.authorized_client.force_login(self.user)
-        self.username = self.user.username
+        self.GUEST_CLIENT = Client()
+        self.USER = User.objects.create_user(username='IvanovI')
+        self.AUTHORIZED_CLIENT = Client()
+        self.AUTHORIZED_CLIENT.force_login(self.USER)
+        self.USERNAME = self.USER.username
         # второй клиент не автор поста
-        self.authorized_client_2 = Client()
+        self.AUTHORIZED_CLIENT_2 = Client()
         self.user_2 = User.objects.create_user(username='PetrovP')
-        self.authorized_client_2 = Client()
-        self.authorized_client_2.force_login(self.user_2)
-        self.username_2 = self.user_2.username
+        self.AUTHORIZED_CLIENT_2 = Client()
+        self.AUTHORIZED_CLIENT_2.force_login(self.user_2)
+        self.USERNAME_2 = self.user_2.username
         # создание поста
-        pub_date = dt.datetime.now().date()
         self.post = Post.objects.create(text="Ж" * 50,
                                         group=self.group,
-                                        author=self.user,
-                                        pub_date=pub_date)
+                                        author=self.USER)
         # библиотека юрлов
-        post_id = self.post.id
-        slug = self.group.slug
-        self.url_names = {
-            'index.html': reverse('index'),
-            'group.html': reverse('group_posts', kwargs={'slug': slug}),
-            'new.html': reverse('new_post'),
-            'profile.html': reverse('profile', kwargs={'username':
-                                                       self.username}),
-            'post.html': reverse('post', kwargs={'username':
-                                                 self.username,
-                                                 'post_id': post_id})
-        }
+        self.POST_ID = self.post.id
+        self.SLUG = self.group.slug
+        self.GROUP_PAGE = reverse('group_posts', kwargs={'slug': self.SLUG})
+        self.PROFILE_PAGE = reverse('profile', kwargs={'username':
+                                                       self.USERNAME})
+        self.POST_PAGE = reverse('post', kwargs={'username':
+                                                 self.USERNAME,
+                                                 'post_id': self.POST_ID})
+        self.EDIT_PAGE = reverse('post_edit',
+                                 kwargs={'username': self.USERNAME,
+                                         'post_id': self.post.id, })
 
     # 1. Проверка запросов к страницам
-    def test_unauth_user_url_exists(self):
+    def test_url_exists(self):
         """Проверка доступности адресов любого клиента"""
-        for template, url in itertools.islice(self.url_names.items(), 2):
-            with self.subTest(url=url):
-                response = self.guest_client.get(url)
-                self.assertEqual(response.status_code, 200)
 
-    def test_auth_user_urls_exists(self):
-        """Проверка доступности адресов для авторизированного клиента"""
-        for template, url in self.url_names.items():
-            with self.subTest(url=url):
-                response = self.authorized_client.get(url)
-                self.assertEqual(response.status_code, 200)
+        url_names = [[HOME_PAGE, self.GUEST_CLIENT, 200],
+                     [HOME_PAGE, self.AUTHORIZED_CLIENT, 200],
+                     [self.GROUP_PAGE, self.GUEST_CLIENT, 200],
+                     [self.GROUP_PAGE, self.AUTHORIZED_CLIENT, 200],
+                     [self.POST_PAGE, self.GUEST_CLIENT, 200],
+                     [self.POST_PAGE, self.AUTHORIZED_CLIENT, 200],
+                     [self.PROFILE_PAGE, self.GUEST_CLIENT, 200],
+                     [self.PROFILE_PAGE, self.AUTHORIZED_CLIENT, 200],
+                     [NEW_POST, self.GUEST_CLIENT, 302],
+                     [NEW_POST, self.AUTHORIZED_CLIENT, 200],
+                     [self.EDIT_PAGE, self.GUEST_CLIENT, 302],
+                     [self.EDIT_PAGE, self.AUTHORIZED_CLIENT, 200],
+                     [self.EDIT_PAGE, self.AUTHORIZED_CLIENT_2, 302], ]
+
+        for stack in url_names:
+            with self.subTest(stack=stack):
+                response = stack[1].get(stack[0])
+                self.assertEqual(response.status_code, stack[2])
 
     # 2. Проверка шаблонов
     def test_unauth_user_url_uses_correct_templates(self):
         """Проверка шаблона '/' """
-        for template, url in itertools.islice(self.url_names.items(), 2):
-            with self.subTest(url=url):
-                response = self.authorized_client.get(url)
-                self.assertTemplateUsed(response, template, 'не найден шаблон '
-                                                            f'{template} для '
-                                                            f'страницы '
-                                                            f'{url}')
+        templates = ['index.html', 'index.html', 'group.html', 'group.html',
+                     'post.html', 'post.html', 'profile.html', 'profile.html',
+                     'new.html', 'new.html', 'post.html',
+                     'post.html', 'post.html']
+        url_names = []
+        for i in url_names:
+            for i in templates:
+                url_names[3] = templates[i]
 
-    def test_auth_user_url_uses_correct_templates(self):
-        """Проверка шаблонов для authorized_client"""
-        for template, url in self.url_names.items():
-            with self.subTest(url=url):
-                response = self.authorized_client.get(url)
-                self.assertTemplateUsed(response, template, 'не найден шаблон '
-                                                            f'{template} для '
+        for stack in url_names:
+            with self.subTest(stack=stack):
+                response = stack[1].get(stack[0])
+                self.assertTemplateUsed(response, stack[3], 'не найден шаблон '
+                                                            f'{stack[3]} для '
                                                             f'страницы '
-                                                            f'{url}')
-
-    def test_auth_user_post_edit_url_uses_correct_templates(self):
-        """Проверка шаблонов для authorized_client"""
-        form_data = ['new.html', reverse('post_edit',
-                                         kwargs={'username': self.username,
-                                                 'post_id': self.post.id, })]
-        response = self.authorized_client.get(form_data[1])
-        self.assertTemplateUsed(response, form_data[0])
+                                                            f'{stack[0]}')
 
     # Проверка редиректов
     def test_post_edit_redirect(self):
@@ -99,20 +90,9 @@ class StaticURLTests(TestCase):
             'group': self.group.id,
             'text': 'тестовая публикация'}
 
-        redirect_url = reverse('post', kwargs={'username': self.username,
-                                               'post_id': self.post.id, })
-
-        self.authorized_client_2.post(reverse('post_edit',
-                                              kwargs={'username':
-                                                      self.username,
-                                                      'post_id':
-                                                      self.post.id, }),
+        self.AUTHORIZED_CLIENT_2.post(self.EDIT_PAGE,
                                       data=form_data, follow=True)
 
-        response = self.authorized_client_2.post(reverse('post_edit',
-                                                 kwargs={'username':
-                                                         self.username,
-                                                         'post_id':
-                                                         self.post.id}, ),
+        response = self.AUTHORIZED_CLIENT_2.post(self.EDIT_PAGE,
                                                  data=form_data, follow=True)
-        self.assertRedirects(response, redirect_url)
+        self.assertRedirects(response, self.POST_PAGE)

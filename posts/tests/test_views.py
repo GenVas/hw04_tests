@@ -1,265 +1,169 @@
-import datetime as dt
-import itertools as it
-
-from django import forms
 from django.test import Client, TestCase
 from django.urls import reverse
 
 from posts.models import Group, Post, User
+from posts.settings import POSTS_ON_PAGE
+
+HOME_PAGE, NEW_POST = reverse('index'), reverse('new_post')
+
+POST_TEST_TEXT = "Ж" * 50
 
 
 class PostPagesTests(TestCase):
-    @classmethod
-    def setUpClass(cls):
-        super().setUpClass()
-        cls.group = Group.objects.create(title="Тест-название",
-                                         slug='test_slug',
-                                         description="Тест-описание")
-
     def setUp(self):
+        self.group = Group.objects.create(title="Тест-название",
+                                          slug='test_slug',
+                                          description="Тест-описание")
+
         # первый клиент автор поста
-        self.guest_client = Client()
-        self.user = User.objects.create_user(username='IvanovI')
-        self.authorized_client = Client()
-        self.authorized_client.force_login(self.user)
-        self.username = self.user.username
+        self.GUEST_CLIENT = Client()
+        self.USER = User.objects.create_user(username='IvanovI')
+        self.AUTHORIZED_CLIENT = Client()
+        self.AUTHORIZED_CLIENT.force_login(self.USER)
+        self.USERNAME = self.USER.username
         # второй клиент не автор поста
-        self.authorized_client_2 = Client()
+        self.AUTHORIZED_CLIENT_2 = Client()
         self.user_2 = User.objects.create_user(username='PetrovP')
-        self.authorized_client_2 = Client()
-        self.authorized_client_2.force_login(self.user_2)
+        self.AUTHORIZED_CLIENT_2 = Client()
+        self.AUTHORIZED_CLIENT_2.force_login(self.user_2)
         self.username_2 = self.user_2.username
 
         # создание поста
-        pub_date = dt.datetime.now().date()
-        self.post = Post.objects.create(text="Ж" * 50,
+        self.post = Post.objects.create(text=POST_TEST_TEXT,
                                         group=self.group,
-                                        author=self.user,
-                                        pub_date=pub_date)
+                                        author=self.USER)
         # библиотека юрлов
-        post_id = self.post.id
-        slug = self.group.slug
-        self.url_names = {
-            'index.html': reverse('index'),
-            'group.html': reverse('group_posts', kwargs={'slug': slug}),
-            'new.html': reverse('new_post'),
-            'profile.html': reverse('profile', kwargs={'username':
-                                                       self.username}),
-            'post.html': reverse('post', kwargs={'username':
-                                                 self.username,
-                                                 'post_id': post_id})
-        }
-        # тестовый пост для проверки
-        self.test_post = {
-            'text': "Ж" * 50,
-            'pub_date': self.post.pub_date,
-            'author': self.username,
-            'group': self.group.title,
-            'slug': slug
-        }
-
-    # Проверяем используемые шаблоны
-    def test_pages_uses_correct_template(self):
-        """URL-адрес использует соответствующий шаблон."""
-        for template, reverse_name in self.url_names.items():
-            with self.subTest(reverse_name=reverse_name):
-                response = self.authorized_client.get(reverse_name)
-                self.assertTemplateUsed(response, template)
+        self.POST_ID = self.post.id
+        self.SLUG = self.group.slug
+        self.GROUP_PAGE = reverse('group_posts', kwargs={'slug': self.SLUG})
+        self.PROFILE_PAGE = reverse('profile', kwargs={'username':
+                                                       self.USERNAME})
+        self.POST_PAGE = reverse('post', kwargs={'username':
+                                                 self.USERNAME,
+                                                 'post_id': self.POST_ID})
+        self.EDIT_PAGE = reverse('post_edit',
+                                 kwargs={'username': self.USERNAME,
+                                         'post_id': self.post.id, })
 
     # Проверяем контекст
-    def test_all_page_shows_correct_context(self):  # компилирую компактн верс
-        """Шаблоны index, group, new сформированы с правильным контекстом."""
-        for template, url in it.islice(self.url_names.items(), 2):
-            with self.subTest(value=url):
-                response = self.guest_client.get((url))
-                first_object = response.context['page'][0]
-                dictionary = {'text': first_object.text,
-                              'pub_date': first_object.pub_date,
-                              'author': first_object.author.username,
-                              'group': first_object.group.title,
-                              'slug': first_object.group.slug, }
-                for key, value in it.islice(self.test_post.items(), 4):
-                    self.assertEqual(dictionary[key], value)
+    def test_main_group_pages_shows_correct_context(self):
+        """Страница index, group сформированы с правильным контекстом."""
+        urls = [['index.html', HOME_PAGE],
+                ['group.html', self.GROUP_PAGE], ]
 
-    # Попробовал написать компактуню версию тестов, которые будут далее.
-    # закомментил тесты для сравнения
-    def test_all_page_shows_correct_context(self):
-        """Шаблоны сформированы с правильным контекстом."""
-        for template, url in it.islice(self.url_names.items(), 3, 4):
+        for template, url in urls:
             with self.subTest(url=url):
-                response = self.guest_client.get((url))
+                response = self.GUEST_CLIENT.get(url)
                 first_object = response.context['page'][0]
-                dictionary = {'text': first_object.text,
-                              'pub_date': first_object.pub_date,
-                              'author': first_object.author.username,
-                              'group': first_object.group.title, }
-                for key, value in it.islice(self.test_post.items(), 4):
-                    self.assertEqual(dictionary[key], value)
+                field_values = [[POST_TEST_TEXT, first_object.text],
+                                [self.USERNAME, first_object.author.username],
+                                [self.group.title, first_object.group.title], ]
 
-    # def test_main_page_shows_correct_context(self):
-    #     """Шаблон index сформирован с правильным контекстом."""
-    #     response = self.guest_client.get(reverse('index'))
-    #     first_object = response.context['page'][0]
-    #     dictionary = {
-    #         'text': first_object.text,
-    #         'pub_date': first_object.pub_date,
-    #         'author': first_object.author.username,
-    #         'group': first_object.group.title,
-    #     }
-    #     for key, value in it.islice(self.test_post.items(), 3):
-    #         with self.subTest(value=value):
-    #             self.assertEqual(dictionary[key], value)
+                for field, value in field_values:
+                    self.assertEqual(field, value)
 
-    # def test_group_page_shows_correct_context(self):
-    #     """Шаблон группы сформирован с правильным контекстом."""
-    #     response = self.guest_client.get(reverse('group_posts',
-    #                                              kwargs={'slug':
-    #                                                      self.group.slug}))
-    #     first_object = response.context['page'][0]
-    #     dictionary = {
-    #         'text': first_object.text,
-    #         'pub_date': first_object.pub_date,
-    #         'author': first_object.author.username,
-    #         'group': first_object.group.title,
-    #     }
-    #     for key, value in it.islice(self.test_post.items(), 4):
-    #         with self.subTest(value=value):
-    #             self.assertEqual(dictionary[key], value)
+    def test_slug_pages_shows_correct_context(self):
+        """Страница profile и post сформированы с правильным контекстом."""
 
-    def test_new_post_page_shows_correct_context(self):
-        """Шаблон home сформирован с правильным контекстом."""
-        response = self.authorized_client.get(reverse('new_post'))
-        form_fields = {
-            'text': forms.fields.CharField,
-            'group': forms.fields.ChoiceField,
-        }
-        for value, expected in form_fields.items():
+        urls = [self.PROFILE_PAGE, self.POST_PAGE, ]
+        response = self.GUEST_CLIENT.get(urls[0])
+        first_object = response.context['page'][0]
+        field_values = [[POST_TEST_TEXT, first_object.text],
+                        [self.USERNAME, first_object.author.username],
+                        [self.group.title, first_object.group.title], ]
+        self.assertEqual(Post.objects.count(), 1)
+        for field, value in field_values:
             with self.subTest(value=value):
-                form_field = response.context['form'].fields[value]
-                self.assertIsInstance(form_field, expected)
+                self.assertEqual(field, value, f'{field} {value}')
+
+        response = self.GUEST_CLIENT.get(urls[1])
+        first_object = response.context['post']
+        field_values = [[POST_TEST_TEXT, first_object.text],
+                        [self.USERNAME, first_object.author.username],
+                        [self.group.title, first_object.group.title], ]
+        self.assertEqual(Post.objects.count(), 1)
+        for field, value in field_values:
+            with self.subTest(value=value):
+                self.assertEqual(field, value, f'{field} {value}')
 
     def test_post_on_relevant_page(self):
         '''Пост отображается на главной странице и странице группы'''
         form_data = {
-            'group': Group.objects.create(title='т_группа', slug='t_group').id,
+            'group': Group.objects.create(title='т_группа', slug='t_group'),
             'text': 'тестовая публикация',
-            'author': self.user,
-            'pub_date': dt.datetime.today().date()
+            'author': self.USER
         }
-        response = self.authorized_client.post(reverse('new_post'),
-                                               data=form_data,
-                                               follow=True
-                                               )
-        with self.subTest():
-            self.assertRedirects(response, reverse('index'))
+
+        Post.objects.create(text=form_data['text'],
+                            group=form_data['group'],
+                            author=self.USER)
 
         with self.subTest():
-            response = self.authorized_client.get(reverse('index'))
+            response = self.GUEST_CLIENT.get(HOME_PAGE)
             context = response.context['page'][0]
             self.assertEqual(context.text, form_data['text'])
 
         # Отображение на странице выбранной группы
-        response1 = self.authorized_client.get(reverse('group_posts',
-                                                       kwargs={'slug':
-                                                               't_group'})
-                                               )
-        response2 = self.authorized_client.get(self.url_names['group.html'])
+        response1 = self.AUTHORIZED_CLIENT.get(reverse('group_posts',
+                                               kwargs={'slug':
+                                                       't_group'}))
+        response2 = self.AUTHORIZED_CLIENT.get(self.GROUP_PAGE)
         context_group1 = response1.context['page'][0]
         context_group2 = response2.context['page'][0]
         with self.subTest():
             self.assertEqual(context_group1.text, form_data['text'])
             self.assertNotEqual(context_group2.text, form_data['text'])
 
-    def test_post_edit_by_non_author(self):
-        '''При редактировании поста не автором поста
-        редактирование не осуществляется'''
-        posts_count_before = Post.objects.count()
-        form_data = {
-            'group': self.group.id,
-            'text': 'тестовая публикация'
-        }
-        self.authorized_client_2.post(reverse('post_edit',
-                                              kwargs={'username':
-                                                      self.username,
-                                                      'post_id':
-                                                      self.post.id, }),
-                                      data=form_data, follow=True)
-        edited_post = Post.objects.get(pk=self.post.id)
-        self.assertNotEqual(edited_post.text, form_data['text'])
-        self.assertEqual(posts_count_before, Post.objects.count())
-
     def test_post_edit_by_author(self):
         '''Автор поста может редактировать свой пост
-        и происзодит обновление базы данных'''
+        и производит обновление базы данных'''
         posts_count_before = Post.objects.count()
         form_data = {
             'group': self.group.id,
             'text': 'тестовая публикация'
         }
-        self.authorized_client.post(reverse('post_edit',
-                                    kwargs={'username': self.username,
-                                            'post_id': self.post.id, }),
+        self.AUTHORIZED_CLIENT.post(self.EDIT_PAGE,
                                     data=form_data, follow=True)
         # print(response.context)  #print(response.context)
         edited_post = Post.objects.get(pk=self.post.id)
         self.assertEqual(edited_post.text, 'тестовая публикация')
         self.assertEqual(posts_count_before, Post.objects.count())
 
-    def test_post_edit_by_guest(self):
-        '''Гость не может редактировать пост'''
-        posts_count_before = Post.objects.count()
-        form_data = {
-            'group': self.group.id,
-            'text': 'тестовая публикация'
-        }
-        self.guest_client.post(reverse('post_edit',
-                               kwargs={'username': self.username,
-                                       'post_id': self.post.id, }),
-                               data=form_data, follow=True)
-        edited_post = Post.objects.get(pk=self.post.id)
-        self.assertNotEqual(edited_post.text, form_data['text'])
-        self.assertEqual(posts_count_before, Post.objects.count())
-
 
 class PaginatorViewsTest(TestCase):
-    @classmethod
-    def setUpClass(cls):
-        super().setUpClass()
-        cls.group = Group.objects.create(title="Тест-название",
-                                         slug='test_slug',
-                                         description="Тест-описание")
-        pub_date = dt.datetime.now().date()
+    def setUp(self):
+
+        self.group = Group.objects.create(title="Тест-название",
+                                          slug='test_slug',
+                                          description="Тест-описание")
         author = User.objects.create_user(username='test_user')
+
         for i in range(0, 13):
             Post.objects.create(text="Ж" * i,
-                                group=cls.group,
-                                author=author,
-                                pub_date=pub_date)
-
-    def setUp(self):
+                                group=self.group,
+                                author=author)
         slug = self.group.slug
-        self.guest_client = Client()
-        self.user = User.objects.create_user(username='IvanovI')
-        self.group_url = reverse('group_posts', kwargs={'slug':
-                                                        slug})
+        self.GUEST_CLIENT = Client()
+        self.USER = User.objects.create_user(username='IvanovI')
+        self.GROUP_PAGE = reverse('group_posts', kwargs={'slug':
+                                                         slug})
         self.url_names = {
-            'index.html': reverse('index'),
-            'group.html': reverse('group_posts', kwargs={'slug': slug}),
-            'new.html': reverse('new_post')
+            'index.html': HOME_PAGE,
+            'group.html': self.GROUP_PAGE,
+            'new.html': NEW_POST
         }
 
     def test_first_page_containse_ten_records(self):
-        '''На стр 1 Paginator отображает 10 записей'''
-        for template, url in it.islice(self.url_names.items(), 1):
+        '''На 1,2 стр Paginator отображается нужное количество записей'''
+        posts_count = Post.objects.count()
+        second_page_posts_count = posts_count - POSTS_ON_PAGE
+        urls = [[HOME_PAGE, POSTS_ON_PAGE],
+                [self.GROUP_PAGE, POSTS_ON_PAGE],
+                [HOME_PAGE + '?page=2', second_page_posts_count],
+                [self.GROUP_PAGE + '?page=2', second_page_posts_count], ]
+
+        for url, length in urls:
             with self.subTest(url=url):
                 response = self.client.get(url)
                 len_list = len(response.context.get('page').object_list)
-                self.assertEqual(len_list, 10)
-
-    def test_second_page_containse_three_records(self):
-        '''На стр 2 Paginator отображает остальные записи'''
-        for template, url in it.islice(self.url_names.items(), 1):
-            with self.subTest(url=url):
-                response = self.client.get(url + '?page=2')
-                len_list = len(response.context.get('page').object_list)
-                self.assertEqual(len_list, 3)
+                self.assertEqual(len_list, length)

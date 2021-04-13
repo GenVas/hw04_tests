@@ -1,71 +1,75 @@
 <!-- 'profile.html' -->
 {% extends "base.html" %}
-{% block title %}Записи пользователя {{ fullname }}{% endblock %}
-{% block header %}{{ fullname }}{% endblock %}
+{% block title %}Записи пользователя {{ username.get_full_name }}{% endblock %}
+{% block header %}{{ username.get_full_name }}{% endblock %}
 {% block content %}
 
 <main role="main" class="container">
-    <div class="row">
-            <div class="col-md-3 mb-3 mt-1">
-                    <div class="card">
-                            <div class="card-body">
-                                    <div class="h2">
-                                        {% if author.get_full_name %}
+  <div class="row">
+    <div class="col-md-3 mb-3 mt-1">
+      <div class="card">
+        <div class="card-body">
+          <div class="h2">
+            {% if author.get_full_name %}
               {{ author.get_full_name }}
             {% endif %}
-                                        {{ username.get_full_name }}
-                                    </div>
-                                    <div class="h3 text-muted">
-                                         @{{ username }}
-                                    </div>
-                            </div>
-                            <ul class="list-group list-group-flush">
-                                    <li class="list-group-item">
-                                            <div class="h6 text-muted">
-                                            Подписчиков: XXX <br />
-                                            Подписан: XXX
-                                            </div>
-                                    </li>
-                                    <li class="list-group-item">
-                                            <div class="h6 text-muted">
-                                                Записей: {{ posts_count }}
-                                            </div>
-                                    </li>
-                            </ul>
-                    </div>
+            {{ username.get_full_name }}
+          </div>
+          <div class="h3 text-muted">
+            @<a href="{% url 'profile' username %}">{{ user.username }}</a> 
+          </div>
+        </div>
+          <ul class="list-group list-group-flush">
+            <li class="list-group-item">
+              <div class="h6 text-muted">
+              Подписчиков: XXX <br />
+              Подписан: XXX
+              </div>
+            </li>
+            <li class="list-group-item">
+              <div class="h6 text-muted">
+                Записей: {{ posts_count }}
+              </div>
+            </li>
+          </ul>
+      </div>
+    </div>
+
+    <div class="col-md-9">                
+
+    {% for post in page %} 
+      <div class="card mb-3 mt-1 shadow-sm">
+        <div class="card-body">
+          <p class="card-text">
+            <!-- Ссылка на страницу автора в атрибуте href; username автора в тексте ссылки -->
+            <a href="{% url 'profile' post.author %}"><strong class="d-block text-gray-dark">@{{ username }}</strong></a>
+            <!-- Текст поста -->
+            {{ post.text|linebreaksbr }} 
+            {% if post.group %}
+              <br> Группа: <a class="btn btn-sm text-muted" href="{% url 'group_posts' post.group.slug %} role="button">{{ post.group }} </a>
+            {% endif %}
+          </p>
+          <div class="d-flex justify-content-between align-items-center">
+            <div class="btn-group ">
+              <a class="btn btn-sm text-muted" href="{% url 'post' post.author post.id %}" role="button">Просмотреть запись</a>
+              <!-- Ссылка на страницу записи в атрибуте href-->
+              <!-- <a class="btn btn-sm text-muted" href="/leo/37/comment" role="button">Добавить комментарий</a> -->
+              <!-- Ссылка на редактирование, показывается только автору записи -->
+              {% if user == post.author %}
+                      <a class="btn btn-sm text-muted" href="{% url 'post_edit' username post.id %}" role="button">Редактировать</a>
+              {% endif %}
             </div>
+            <!-- Дата публикации  -->
+            <small class="text-muted">{{ post.pub_date|date:"d M Y" }}</small>
+          </div>
+        </div>
+      </div>
+    {% endfor %}
 
-            <div class="col-md-9">                
+    {% include "paginator.html" %}
 
-                {% for post in page %} 
-                    <div class="card mb-3 mt-1 shadow-sm">
-                            <div class="card-body">
-                                    <p class="card-text">
-                                            <!-- Ссылка на страницу автора в атрибуте href; username автора в тексте ссылки -->
-                                            <a href="{% url 'profile' post.author %}"><strong class="d-block text-gray-dark">@{{ username }}</strong></a>
-                                            <!-- Текст поста -->
-                                            {{ post.text|linebreaksbr }} 
-                                    </p>
-                                    <div class="d-flex justify-content-between align-items-center">
-                                            <div class="btn-group ">
-                                                <a class="btn btn-sm text-muted" href="{% url 'post' post.author post.id %}" role="button">Просмотреть запись</a>
-                                                <!-- Ссылка на страницу записи в атрибуте href-->
-                                                <a class="btn btn-sm text-muted" href="/leo/37/comment" role="button">Добавить комментарий</a>
-                                                <!-- Ссылка на редактирование, показывается только автору записи -->
-                                                {% if user == post.author %}
-                                                        <a class="btn btn-sm text-muted" href="{% url 'post_edit' username post.id %}" role="button">Редактировать</a>
-                                                {% endif %}
-                                            </div>
-                                            <!-- Дата публикации  -->
-                                            <small class="text-muted">{{ post.pub_date|date:"d M Y" }}</small>
-                                    </div>
-                            </div>
-                    </div>
-                    {% endfor %}
-
-                    {% include "paginator.html" %}
+  </div>
+  </div>
+</main>
 
 {% endblock %}
-     </div>
-    </div>
-</main>
