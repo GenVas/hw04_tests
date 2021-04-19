@@ -1,7 +1,7 @@
 <!-- 'profile.html' -->
 {% extends "base.html" %}
-{% block title %}Записи пользователя {{ username.get_full_name }}{% endblock %}
-{% block header %}{{ username.get_full_name }}{% endblock %}
+{% block title %}Записи пользователя {{ author.get_full_name }}{% endblock %}
+{% block header %}{{ author.get_full_name }}{% endblock %}
 {% block content %}
 
 <main role="main" class="container">
@@ -13,10 +13,9 @@
             {% if author.get_full_name %}
               {{ author.get_full_name }}
             {% endif %}
-            {{ username.get_full_name }}
           </div>
           <div class="h3 text-muted">
-            @<a href="{% url 'profile' username %}">{{ user.username }}</a> 
+            @<a href="{% url 'profile' author %}">{{ author.username }}</a> 
           </div>
         </div>
           <ul class="list-group list-group-flush">
@@ -28,7 +27,7 @@
             </li>
             <li class="list-group-item">
               <div class="h6 text-muted">
-                Записей: {{ posts_count }}
+                Записей: <a>{{ author.posts.count }}</a>
               </div>
             </li>
           </ul>
@@ -42,7 +41,7 @@
         <div class="card-body">
           <p class="card-text">
             <!-- Ссылка на страницу автора в атрибуте href; username автора в тексте ссылки -->
-            <a href="{% url 'profile' post.author %}"><strong class="d-block text-gray-dark">@{{ username }}</strong></a>
+            <a href="{% url 'profile' post.author %}"><strong class="d-block text-gray-dark">@{{ author }}</strong></a>
             <!-- Текст поста -->
             {{ post.text|linebreaksbr }} 
             {% if post.group %}
@@ -56,7 +55,7 @@
               <!-- <a class="btn btn-sm text-muted" href="/leo/37/comment" role="button">Добавить комментарий</a> -->
               <!-- Ссылка на редактирование, показывается только автору записи -->
               {% if user == post.author %}
-                      <a class="btn btn-sm text-muted" href="{% url 'post_edit' username post.id %}" role="button">Редактировать</a>
+                      <a class="btn btn-sm text-muted" href="{% url 'post_edit' author post.id %}" role="button">Редактировать</a>
               {% endif %}
             </div>
             <!-- Дата публикации  -->

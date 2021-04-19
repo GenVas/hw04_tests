@@ -3,96 +3,88 @@ from django.urls import reverse
 
 from posts.models import Group, Post, User
 
-HOME_PAGE, NEW_POST = reverse('index'), reverse('new_post')
+HOME_PAGE, NEW_POST = reverse("index"), reverse("new_post")
 
 
 class StaticURLTests(TestCase):
     def setUp(self):
         self.group = Group.objects.create(title="Тест-название",
-                                          slug='test_slug',
+                                          slug="test_slug",
                                           description="Тест-описание")
         # первый клиент автор поста
-        self.GUEST_CLIENT = Client()
-        self.USER = User.objects.create_user(username='IvanovI')
-        self.AUTHORIZED_CLIENT = Client()
-        self.AUTHORIZED_CLIENT.force_login(self.USER)
-        self.USERNAME = self.USER.username
+        self.guest_client = Client()
+        self.user = User.objects.create_user(username="IvanovI")
+        self.authorized_client = Client()
+        self.authorized_client.force_login(self.user)
+        self.username = self.user.username
         # второй клиент не автор поста
-        self.AUTHORIZED_CLIENT_2 = Client()
-        self.user_2 = User.objects.create_user(username='PetrovP')
-        self.AUTHORIZED_CLIENT_2 = Client()
-        self.AUTHORIZED_CLIENT_2.force_login(self.user_2)
-        self.USERNAME_2 = self.user_2.username
+        self.authorized_client_2 = Client()
+        self.user_2 = User.objects.create_user(username="PetrovP")
+        self.authorized_client_2 = Client()
+        self.authorized_client_2.force_login(self.user_2)
         # создание поста
         self.post = Post.objects.create(text="Ж" * 50,
                                         group=self.group,
-                                        author=self.USER)
+                                        author=self.user)
         # библиотека юрлов
-        self.POST_ID = self.post.id
-        self.SLUG = self.group.slug
-        self.GROUP_PAGE = reverse('group_posts', kwargs={'slug': self.SLUG})
-        self.PROFILE_PAGE = reverse('profile', kwargs={'username':
-                                                       self.USERNAME})
-        self.POST_PAGE = reverse('post', kwargs={'username':
-                                                 self.USERNAME,
-                                                 'post_id': self.POST_ID})
-        self.EDIT_PAGE = reverse('post_edit',
-                                 kwargs={'username': self.USERNAME,
-                                         'post_id': self.post.id, })
+        self.post_id = self.post.id
+        self.post_page = reverse("post", args=[self.username,
+                                               self.post_id])
+        self.edit_page = reverse("post_edit",
+                                 args=[self.username, self.post.id, ])
 
     # 1. Проверка запросов к страницам
     def test_url_exists(self):
         """Проверка доступности адресов любого клиента"""
+        slug = self.group.slug
+        group_page = reverse("group_posts", args=[slug])
+        profile_page = reverse("profile", args=[self.username])
+        url_names = [
+            [HOME_PAGE, self.guest_client, 200],
+            [group_page, self.guest_client, 200],
+            [self.post_page, self.guest_client, 200],
+            [profile_page, self.guest_client, 200],
+            [NEW_POST, self.guest_client, 302],
+            [NEW_POST, self.authorized_client, 200],
+            [self.edit_page, self.guest_client, 302],
+            [self.edit_page, self.authorized_client, 200],
+        ]
 
-        url_names = [[HOME_PAGE, self.GUEST_CLIENT, 200],
-                     [HOME_PAGE, self.AUTHORIZED_CLIENT, 200],
-                     [self.GROUP_PAGE, self.GUEST_CLIENT, 200],
-                     [self.GROUP_PAGE, self.AUTHORIZED_CLIENT, 200],
-                     [self.POST_PAGE, self.GUEST_CLIENT, 200],
-                     [self.POST_PAGE, self.AUTHORIZED_CLIENT, 200],
-                     [self.PROFILE_PAGE, self.GUEST_CLIENT, 200],
-                     [self.PROFILE_PAGE, self.AUTHORIZED_CLIENT, 200],
-                     [NEW_POST, self.GUEST_CLIENT, 302],
-                     [NEW_POST, self.AUTHORIZED_CLIENT, 200],
-                     [self.EDIT_PAGE, self.GUEST_CLIENT, 302],
-                     [self.EDIT_PAGE, self.AUTHORIZED_CLIENT, 200],
-                     [self.EDIT_PAGE, self.AUTHORIZED_CLIENT_2, 302], ]
-
-        for stack in url_names:
-            with self.subTest(stack=stack):
-                response = stack[1].get(stack[0])
-                self.assertEqual(response.status_code, stack[2])
+        for url, client, code in url_names:
+            with self.subTest(url=url):
+                self.assertEqual(client.get(url).status_code, code)
 
     # 2. Проверка шаблонов
-    def test_unauth_user_url_uses_correct_templates(self):
-        """Проверка шаблона '/' """
-        templates = ['index.html', 'index.html', 'group.html', 'group.html',
-                     'post.html', 'post.html', 'profile.html', 'profile.html',
-                     'new.html', 'new.html', 'post.html',
-                     'post.html', 'post.html']
-        url_names = []
-        for i in url_names:
-            for i in templates:
-                url_names[3] = templates[i]
+    def test_url_uses_correct_templates(self):
+        """Проверка шаблонов для адресов и разных клиентов "/" """
+        slug = self.group.slug
+        group_page = reverse("group_posts", args=[slug])
+        profile_page = reverse("profile", args=[self.username])
+        url_names = [
+            ["index.html", HOME_PAGE, self.guest_client],
+            ["group.html", group_page, self.guest_client],
+            ["post.html", self.post_page, self.guest_client],
+            ["profile.html", profile_page, self.guest_client],
+            ["new.html", NEW_POST, self.authorized_client],
+            ["new.html", self.edit_page, self.authorized_client],
+        ]
 
-        for stack in url_names:
-            with self.subTest(stack=stack):
-                response = stack[1].get(stack[0])
-                self.assertTemplateUsed(response, stack[3], 'не найден шаблон '
-                                                            f'{stack[3]} для '
-                                                            f'страницы '
-                                                            f'{stack[0]}')
+        for template, url, client in url_names:
+            with self.subTest(url=url):
+                self.assertTemplateUsed(client.get(url), template)
 
     # Проверка редиректов
-    def test_post_edit_redirect(self):
-        """Со странцы редактирования не автор направлен на страницу поста."""
-        form_data = {
-            'group': self.group.id,
-            'text': 'тестовая публикация'}
+    def test_redirect(self):
+        """Проверка редиректов для страниц."""
 
-        self.AUTHORIZED_CLIENT_2.post(self.EDIT_PAGE,
-                                      data=form_data, follow=True)
+        url_names = [
+            [NEW_POST, self.guest_client, (reverse("login") + "?next="
+                                           + NEW_POST)],
+            [self.edit_page, self.guest_client, (reverse("login")
+                                                 + "?next=" + self.edit_page)],
+            [self.edit_page, self.authorized_client_2, self.post_page],
+        ]
 
-        response = self.AUTHORIZED_CLIENT_2.post(self.EDIT_PAGE,
-                                                 data=form_data, follow=True)
-        self.assertRedirects(response, self.POST_PAGE)
+        for url, client, redirected in url_names:
+            with self.subTest(url=url):
+                self.assertRedirects(client.get(url, follow=True), redirected)

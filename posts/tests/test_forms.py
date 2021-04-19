@@ -25,54 +25,81 @@ class PostPagesTests(TestCase):
         cls.form = PostForm()
 
     def setUp(self):
-        # первый клиент не автор поста
-        self.GUEST_CLIENT = Client()
-        self.USER = User.objects.create_user(username='IvanovI')
-        self.AUTHORIZED_CLIENT = Client()
-        self.AUTHORIZED_CLIENT.force_login(self.USER)
-        self.USERNAME = self.USER.username
+        # первый клиент автор поста
+        self.guest_client = Client()
+        self.user = User.objects.create_user(username='IvanovI')
         self.authorized_client = Client()
-        self.authorized_client.force_login(self.USER)
+        self.authorized_client.force_login(self.user)
+        self.username = self.user.username
+        self.authorized_client = Client()
+        self.authorized_client.force_login(self.user)
 
         # второй клиент не автор поста
-        self.AUTHORIZED_CLIENT_2 = Client()
+        self.authorized_client_2 = Client()
         self.user_2 = User.objects.create_user(username='PetrovP')
-        self.AUTHORIZED_CLIENT_2 = Client()
-        self.AUTHORIZED_CLIENT_2.force_login(self.user_2)
+        self.authorized_client_2 = Client()
+        self.authorized_client_2.force_login(self.user_2)
         self.username_2 = self.user_2.username
 
-        slug = self.group.slug
-        self.url_names = {
-            'index.html': HOME_PAGE,
-            'group.html': reverse('group_posts', kwargs={'slug': slug}),
-            'new.html': NEW_POST}
-        self.POST = Post.objects.create(text=POST_TEST_TEXT,
+        self.post = Post.objects.create(text=POST_TEST_TEXT,
                                         group=self.group,
-                                        author=self.USER)
-        self.EDIT_PAGE = reverse('post_edit',
-                                 kwargs={'username': self.USERNAME,
-                                         'post_id': self.POST.id, })
+                                        author=self.user)
+        self.EDIT_PAGE = reverse('post_edit', args=[self.username,
+                                                    self.post.id, ])
 
 # Тест для проверки формы создания нового поста (страница /new/)
-    def test_post_on_relevant_page(self):
+    def test_post_created_through_valid_form(self):
         """Валидная форма создает запись в Post"""
-
-        posts_count = Post.objects.count()
         form_data = {
-            'group': self.group.id,
+            'group': self.group.pk,
             'text': 'тестовая публикация',
         }
-        response = self.authorized_client.post(
-            reverse('new_post'),
+
+        form = PostForm(form_data)
+        self.assertTrue(form.is_valid())
+
+        posts_count = Post.objects.count()
+        self.authorized_client.post(
+            NEW_POST,
             data=form_data,
             follow=True
         )
-        self.assertRedirects(response, HOME_PAGE)
+        post_object = Post.objects.filter(text=form_data['text'],
+                                          group=form_data['group'],
+                                          author=self.user.id)
         self.assertEqual(Post.objects.count(), posts_count + 1)
-        self.assertEqual(Post.objects.last().author, self.USER)
-        self.assertEqual(Post.objects.last().group.id, self.group.id)
-        self.assertEqual(Post.objects.get(text=form_data['text']).text,
-                         form_data['text'])
+        self.assertTrue(post_object.exists)
+
+    def test_post_not_created_for_invalid_fields(self):
+        """Невалидная форма не создает запись в Post"""
+        invalid_text = {
+            'group': self.group.pk,
+            'text': '',
+        }
+        invalid_group = {
+            'group': 'group',
+            'text': 'тестовая публикация',
+        }
+        invalid_data = [invalid_text, invalid_group]
+        for invalid in invalid_data:
+            form = PostForm(invalid)
+            self.assertFalse(form.is_valid())
+            posts_count = Post.objects.count()
+            self.authorized_client.post(
+                reverse('new_post'),
+                data=invalid_text,
+                follow=True
+            )
+            try:
+                post_object = Post.objects.filter(
+                    text=invalid['text'],
+                    group=invalid['group'],
+                    author=self.user.id
+                ).count()
+            except ValueError:
+                continue
+            self.assertEqual(post_object, 0)
+            self.assertEqual(Post.objects.count(), posts_count)
 
 # Тест для проверки меток полей Post
     def test_label(self):
@@ -92,7 +119,7 @@ class PostPagesTests(TestCase):
         temp_list = [NEW_POST, self.EDIT_PAGE]
         for url in temp_list:
             with self.subTest(url=url):
-                response = self.AUTHORIZED_CLIENT.get(url)
+                response = self.authorized_client.get(url)
                 form_fields = {
                     'text': forms.fields.CharField,
                     'group': forms.fields.ChoiceField,
@@ -102,36 +129,68 @@ class PostPagesTests(TestCase):
                         form_field = response.context['form'].fields[value]
                         self.assertIsInstance(form_field, expected)
 
+    def test_post_edit_by_author(self):
+        '''Редактировании поста автором поста
+        осуществляется'''
+        pk_list_before = Post.objects.filter().values_list('pk', flat=True)
+        new_group = Group.objects.create(title="новая группа",
+                                         slug='test_slug2',
+                                         description="Тест-описание2")
+        form_data = {
+            'text': 'ну, давай же, редактируйся! Ревьюер требует!',
+            'group': new_group.pk,
+        }
+
+        self.authorized_client.post(self.EDIT_PAGE,
+                                    data=form_data,
+                                    follow=False)
+
+        pk_list_after = Post.objects.filter().values_list('pk', flat=True)
+        self.assertEqual(set(pk_list_before), set(pk_list_after))
+        new_post = Post.objects.get(pk=self.post.id)
+        self.assertEqual(new_post.text, form_data['text'])
+        self.assertEqual(new_post.group.pk, form_data['group'])
+        self.assertEqual(new_post.author.username, self.username)
+
     def test_post_edit_by_non_author(self):
         '''При редактировании поста не автором поста
         редактирование не осуществляется'''
-        posts_count_before = Post.objects.count()
+        pk_list_before = Post.objects.filter().values_list('pk', flat=True)
         new_group = Group.objects.create(title="новая группа",
                                          slug='test_slug2',
                                          description="Тест-описание2")
         form_data = {
-            'group': new_group,
-            'text': 'тестовая публикация'
+            'text': 'это сообщение не должно переписаться в пост',
+            'group': new_group.pk,
         }
-        self.AUTHORIZED_CLIENT_2.post(self.EDIT_PAGE,
-                                      data=form_data, follow=True)
-        self.assertEqual(posts_count_before, Post.objects.count())
-        self.assertNotEqual(self.POST.text, form_data['text'])
-        self.assertNotEqual(self.POST.group, form_data['group'])
-        self.assertNotEqual(self.POST.author, self.username_2)
+        self.authorized_client_2.post(self.EDIT_PAGE,
+                                      data=form_data,
+                                      follow=False)
+
+        pk_list_after = Post.objects.filter().values_list('pk', flat=True)
+        self.assertEqual(set(pk_list_before), set(pk_list_after))
+        new_post = Post.objects.get(pk=pk_list_after[-0])
+        self.assertEqual(new_post.text, self.post.text)
+        self.assertEqual(new_post.group.pk, self.post.group.pk)
+        self.assertEqual(new_post.author.username, self.username)
 
     def test_post_edit_by_guest(self):
         '''Гость не может редактировать пост'''
-        posts_count_before = Post.objects.count()
+        pk_list_before = Post.objects.filter().values_list('pk', flat=True)
         new_group = Group.objects.create(title="новая группа",
                                          slug='test_slug2',
                                          description="Тест-описание2")
         form_data = {
-            'group': new_group,
-            'text': 'тестовая публикация'
+            'text': 'это сообщение не должно переписаться в пост',
+            'group': new_group.pk,
         }
-        self.GUEST_CLIENT.post(self.EDIT_PAGE,
-                               data=form_data, follow=True)
-        self.assertEqual(posts_count_before, Post.objects.count())
-        self.assertNotEqual(self.POST.text, form_data['text'])
-        self.assertNotEqual(self.POST.group, form_data['group'])
+        self.guest_client.post(self.EDIT_PAGE,
+                               data=form_data,
+                               follow=False)
+
+        pk_list_after = Post.objects.filter().values_list('pk', flat=True)
+        self.assertEqual(set(pk_list_before), set(pk_list_after))
+        new_post = Post.objects.get(pk=pk_list_after[-0])
+        self.assertEqual(new_post.text, self.post.text)
+        self.assertEqual(new_post.group.pk, self.post.group.pk)
+        self.assertEqual(new_post.author.username, self.username)
