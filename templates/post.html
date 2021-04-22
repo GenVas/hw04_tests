@@ -3,16 +3,8 @@
 {% block title %}Страница поста{% endblock %}
 {% block header %}Страница поста{% endblock %}
 {% block content %}
+{% load thumbnail %}
 
-    <h3>
-        Автор: <a href="{% url 'profile' post.author.username %}">{{ user.username }}</a>
-        , Дата публикации: {{ post.pub_date|date:"d M Y" }}
-    </h3>
-
-    {% if post.group %}
-        <h4>Группа: <a href="{% url 'group_posts' post.group.slug %}">{{ post.group }}</a></h4>
-    {% endif %}
-
-    <p>Текст публикации: {{ post.text|linebreaksbr }}</p>
+{% include "post_item.html" with post=post %}
 
 {% endblock %}

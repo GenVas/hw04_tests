@@ -1,4 +1,10 @@
+import shutil
+import tempfile
+
 from django import forms
+from django.conf import settings
+from django.core.cache import cache
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client, TestCase
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
@@ -23,6 +29,17 @@ class PostPagesTests(TestCase):
                                          slug='test_slug',
                                          description="Тест-описание")
         cls.form = PostForm()
+        settings.MEDIA_ROOT = tempfile.mkdtemp(dir=settings.BASE_DIR)
+
+    @classmethod
+    def tearDownClass(cls):
+        # Модуль shutil - библиотека Python с прекрасными инструментами
+        # для управления файлами и директориями:
+        # создание, удаление, копирование, перемещение, изменение папок|файлов
+        # Метод shutil.rmtree удаляет директорию и всё её содержимое
+        shutil.rmtree(settings.MEDIA_ROOT, ignore_errors=True)
+        super().tearDownClass()
+        cache.clear()
 
     def setUp(self):
         # первый клиент автор поста
@@ -50,11 +67,24 @@ class PostPagesTests(TestCase):
 # Тест для проверки формы создания нового поста (страница /new/)
     def test_post_created_through_valid_form(self):
         """Валидная форма создает запись в Post"""
+        small_gif = (
+            b'\x47\x49\x46\x38\x39\x61\x02\x00'
+            b'\x01\x00\x80\x00\x00\x00\x00\x00'
+            b'\xFF\xFF\xFF\x21\xF9\x04\x00\x00'
+            b'\x00\x00\x00\x2C\x00\x00\x00\x00'
+            b'\x02\x00\x01\x00\x00\x02\x02\x0C'
+            b'\x0A\x00\x3B'
+        )
+        uploaded = SimpleUploadedFile(
+            name='small.gif',
+            content=small_gif,
+            content_type='image/gif'
+        )
         form_data = {
             'group': self.group.pk,
             'text': 'тестовая публикация',
+            'image': uploaded,
         }
-
         form = PostForm(form_data)
         self.assertTrue(form.is_valid())
 
@@ -66,7 +96,8 @@ class PostPagesTests(TestCase):
         )
         post_object = Post.objects.filter(text=form_data['text'],
                                           group=form_data['group'],
-                                          author=self.user.id)
+                                          author=self.user.id,
+                                          image='posts/small.gif')
         self.assertEqual(Post.objects.count(), posts_count + 1)
         self.assertTrue(post_object.exists)
 
@@ -115,7 +146,25 @@ class PostPagesTests(TestCase):
                 self.assertEqual(title_help_text, label)
 
     def test_new_and_edit_post_page_shows_correct_context(self):
-        """Страница index сформирована правильно через форму"""
+        """Страница new post и eidt_page сформирована правильно через форму"""
+        small_gif = (
+            b'\x47\x49\x46\x38\x39\x61\x02\x00'
+            b'\x01\x00\x80\x00\x00\x00\x00\x00'
+            b'\xFF\xFF\xFF\x21\xF9\x04\x00\x00'
+            b'\x00\x00\x00\x2C\x00\x00\x00\x00'
+            b'\x02\x00\x01\x00\x00\x02\x02\x0C'
+            b'\x0A\x00\x3B'
+        )
+        uploaded = SimpleUploadedFile(
+            name='small.gif',
+            content=small_gif,
+            content_type='image/gif'
+        )
+        form_data = {
+            'group': self.group.pk,
+            'text': 'тестовая публикация',
+            'image': uploaded,
+        }
         temp_list = [NEW_POST, self.EDIT_PAGE]
         for url in temp_list:
             with self.subTest(url=url):
@@ -123,6 +172,7 @@ class PostPagesTests(TestCase):
                 form_fields = {
                     'text': forms.fields.CharField,
                     'group': forms.fields.ChoiceField,
+                    'image': forms.fields.ImageField,
                 }
                 for value, expected in form_fields.items():
                     with self.subTest(value=value):
@@ -194,3 +244,19 @@ class PostPagesTests(TestCase):
         self.assertEqual(new_post.text, self.post.text)
         self.assertEqual(new_post.group.pk, self.post.group.pk)
         self.assertEqual(new_post.author.username, self.username)
+
+# Тестирование кэша
+
+    def test_сache_for_main_page(self):
+        '''Создается кэш главной страницы'''
+        response = self.guest_client.get(HOME_PAGE)
+        Post.objects.create(
+            text='заметка для кэша',
+            author=self.user,
+            group=self.group
+        )
+        response2 = self.guest_client.get(HOME_PAGE)
+        self.assertEqual(response.content, response2.content)
+        cache.clear()
+        response3 = self.guest_client.get(HOME_PAGE)
+        self.assertNotEqual(response.content, response3.content)

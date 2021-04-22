@@ -4,7 +4,7 @@ from django.urls import reverse
 from posts.models import Group, Post, User
 
 HOME_PAGE, NEW_POST = reverse("index"), reverse("new_post")
-
+URL_404 = "404/"
 
 class StaticURLTests(TestCase):
     def setUp(self):
@@ -53,6 +53,11 @@ class StaticURLTests(TestCase):
         for url, client, code in url_names:
             with self.subTest(url=url):
                 self.assertEqual(client.get(url).status_code, code)
+
+    def test_code_404__shows_correct_context(self):
+        """Проверка возвращает ли сервер код 404,
+        если страница не найдена."""
+        self.assertEqual(self.guest_client.get(URL_404).status_code, 404)
 
     # 2. Проверка шаблонов
     def test_url_uses_correct_templates(self):

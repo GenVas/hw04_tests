@@ -144,3 +144,7 @@ dmypy.json
 .history/
 
 .mypy_cache
+
+# медиа
+posts/media
+posts/static
